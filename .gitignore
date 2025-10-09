@@ -1,0 +1,27 @@
+# 编译产物
+*.o
+*.a
+*.so
+*.elf
+scc_kernel
+
+# 调试文件
+*.gdb
+*.map
+
+# 备份文件
+*.bak
+*~
+
+# 编辑器临时文件
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 镜像文件（可选：如果镜像较大可以忽略）
+# floppy.img
+
+# 临时文件
+/tmp/
+*.tmp

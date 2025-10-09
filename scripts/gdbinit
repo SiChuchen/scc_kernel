@@ -1,0 +1,5 @@
+file /home/xz/xv6/hurlex/scc/scc_kernel
+target remote :1234
+break kern_entry
+break panic
+c

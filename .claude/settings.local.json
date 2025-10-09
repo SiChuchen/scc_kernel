@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make:*)",
+      "Bash(readelf:*)",
+      "Bash(nm:*)",
+      "Bash(objdump:*)",
+      "Bash(sudo -S make update_image)",
+      "Bash(timeout 5 qemu-system-i386:*)",
+      "Bash(timeout:*)",
+      "Bash(sudo:*)",
+      "Read(//mnt/kernel/**)",
+      "Bash(sudo -S umount:*)",
+      "Bash(cat:*)",
+      "Bash(pkill:*)",
+      "Read(//home/xz/xv6/hurlex/hurlex-doc/code/chapt9/init/**)",
+      "Read(//home/xz/xv6/hurlex/hurlex-doc/code/chapt9/**)",
+      "Bash(chmod:*)",
+      "Read(//home/xz/xv6/hurlex/hurlex-doc/code/**)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
