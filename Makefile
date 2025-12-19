@@ -77,11 +77,20 @@
 # --------------------------------------------------------
 #
 
-# 自动收集所有 .c / .s 源文件
-C_SOURCES = $(shell find . -name "*.c")
-C_OBJECTS = $(patsubst %.c, %.o, $(C_SOURCES))
-S_SOURCES = $(shell find . -name "*.s")
-S_OBJECTS = $(patsubst %.s, %.o, $(S_SOURCES))
+# 构建输出目录（所有编译产物集中到 _build 目录，避免污染源码树）
+BUILD_DIR := _build
+OBJ_DIR   := $(BUILD_DIR)/obj
+
+# 自动收集所有 .c / .s 源文件，排除 _build
+C_SOURCES = $(shell find . -path "./$(BUILD_DIR)" -prune -o -name "*.c" -print)
+S_SOURCES = $(shell find . -path "./$(BUILD_DIR)" -prune -o -name "*.s" -print)
+
+# 将源码路径映射到 _build/obj 下的对应 .o
+C_OBJECTS = $(patsubst %.c,$(OBJ_DIR)/%.o,$(C_SOURCES))
+S_OBJECTS = $(patsubst %.s,$(OBJ_DIR)/%.o,$(S_SOURCES))
+
+# 最终内核/镜像放到 _build
+KERNEL    := $(BUILD_DIR)/scc_kernel
 
 CC  = gcc
 LD  = ld
@@ -101,40 +110,47 @@ ASM_FLAGS = -f elf -g -F stabs
 
 # 统一的 QEMU 配置（32 位内核，使用 disk.img 启动）
 QEMU       = qemu-system-i386
-DISK_IMG   = disk.img
+DISK_IMG   = $(BUILD_DIR)/disk.img
 # 无图形界面运行 ＋ -nographic
 QEMU_FLAGS = -drive file=$(DISK_IMG),if=ide,format=raw \
              -boot c -serial mon:stdio  \
              -no-reboot -no-shutdown
 
-all: $(S_OBJECTS) $(C_OBJECTS) link update_image
+all: $(KERNEL) update_image
 
-# The automatic variable `$<' is just the first prerequisite
-.c.o:
+# C/Asm 统一规则，自动创建目标目录
+$(OBJ_DIR)/%.o: %.c
+	@mkdir -p $(@D)
 	@echo 编译代码文件 $< ...
 	$(CC) $(C_FLAGS) $< -o $@
 
-.s.o:
+$(OBJ_DIR)/%.o: %.s
+	@mkdir -p $(@D)
 	@echo 编译汇编文件 $< ...
 	$(ASM) $(ASM_FLAGS) $< -o $@
 
-link:
+$(KERNEL): $(S_OBJECTS) $(C_OBJECTS)
+	@mkdir -p $(BUILD_DIR)
 	@echo 链接内核文件...
-	$(LD) $(LD_FLAGS) $(S_OBJECTS) $(C_OBJECTS) -o scc_kernel
+	$(LD) $(LD_FLAGS) $(S_OBJECTS) $(C_OBJECTS) -o $@
 
 .PHONY: clean
 clean:
-	$(RM) $(S_OBJECTS) $(C_OBJECTS) scc_kernel
+	$(RM) -r $(BUILD_DIR)
 
 .PHONY: update_image
-update_image:
+update_image: $(DISK_IMG) $(KERNEL)
 	sudo mkdir -p /mnt/kernel
 	@set -e; \
 	loopdev=$$(sudo losetup -Pf --show $(DISK_IMG)); \
 	sudo mount $${loopdev}p1 /mnt/kernel; \
-	sudo cp scc_kernel /mnt/kernel/scc_kernel; \
+	sudo cp $(KERNEL) /mnt/kernel/scc_kernel; \
 	sudo umount /mnt/kernel; \
 	sudo losetup -d $${loopdev}
+
+# 如果镜像不存在，调用脚本创建；如需自定义大小，可在命令行传入 DISK_SIZE_MB=64
+$(DISK_IMG):
+	DISK_IMG=$(DISK_IMG) ./scripts/make_disk.sh
 
 .PHONY: mount_image
 mount_image:
