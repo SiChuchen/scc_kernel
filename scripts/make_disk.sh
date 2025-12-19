@@ -12,7 +12,7 @@ DISK_SIZE_MB="${DISK_SIZE_MB:-32}"              # 镜像大小（MB），如需�
 MNT="${MNT:-/mnt/kernel}"                       # 临时挂载点
 
 # grub.cfg 内容，如需添加 initrd 或修改 menuentry，可调整这里
-read -r -d '' GRUB_CFG <<'EOF'
+GRUB_CFG="$(cat <<'EOF'
 set timeout=1
 set default=0
 
@@ -22,6 +22,7 @@ menuentry "scc" {
     boot
 }
 EOF
+)"
 # ---------------------------------------------------------
 
 loopdev=""
@@ -29,40 +30,49 @@ loopdev=""
 cleanup() {
   # 卸载挂载点并释放 loop
   if mountpoint -q "$MNT"; then
-    sudo umount "$MNT"
+    _sudo umount "$MNT"
   fi
   if [[ -n "$loopdev" ]]; then
-    sudo losetup -d "$loopdev" || true
+    _sudo losetup -d "$loopdev" || true
   fi
 }
 trap cleanup EXIT
+
+# sudo 包装：若设置了 SUDO_PASS，则用非交互方式；否则走默认 sudo（会提示密码）
+_sudo() {
+  if [[ -n "${SUDO_PASS:-}" ]]; then
+    echo "$SUDO_PASS" | sudo -S "$@"
+  else
+    sudo "$@"
+  fi
+}
 
 echo "[1/7] 创建镜像文件 ${DISK_IMG} (${DISK_SIZE_MB}MB)"
 truncate -s "${DISK_SIZE_MB}M" "$DISK_IMG"
 
 echo "[2/7] 分区表与主分区 (msdos + ext2)"
-sudo parted -s "$DISK_IMG" mklabel msdos
-sudo parted -s "$DISK_IMG" mkpart primary ext2 1MiB 100%
-sudo parted -s "$DISK_IMG" set 1 boot on
+_sudo parted -s "$DISK_IMG" mklabel msdos
+_sudo parted -s "$DISK_IMG" mkpart primary ext2 1MiB 100%
+_sudo parted -s "$DISK_IMG" set 1 boot on
 
 echo "[3/7] 绑定 loop 设备并格式化分区"
-loopdev=$(sudo losetup -Pf --show "$DISK_IMG")
-sudo mkfs.ext2 "${loopdev}p1"
+loopdev=$(_sudo losetup -Pf --show "$DISK_IMG")
+_sudo mkfs.ext2 "${loopdev}p1"
 
 echo "[4/7] 挂载分区并拷贝内核"
-sudo mkdir -p "$MNT"
-sudo mount "${loopdev}p1" "$MNT"
-sudo mkdir -p "$MNT/boot/grub"
+_sudo mkdir -p "$MNT"
+_sudo mount "${loopdev}p1" "$MNT"
+_sudo mkdir -p "$MNT/boot/grub"
 
 echo "[5/7] 写入 grub.cfg"
-echo "$GRUB_CFG" | sudo tee "$MNT/boot/grub/grub.cfg" >/dev/null
+echo "$GRUB_CFG" | _sudo tee "$MNT/boot/grub/grub.cfg" >/dev/null
 
 echo "[6/7] 安装 GRUB (i386-pc) 到镜像 MBR"
-sudo grub-install --target=i386-pc --boot-directory="$MNT/boot" "$loopdev"
+_sudo grub-install --target=i386-pc --boot-directory="$MNT/boot" "$loopdev"
 
 echo "[7/7] 清理挂载与 loop"
-sudo umount "$MNT"
-sudo losetup -d "$loopdev"
+_sudo umount "$MNT"
+_sudo losetup -d "$loopdev"
 loopdev=""
 
 echo "完成：镜像位于 $DISK_IMG"
