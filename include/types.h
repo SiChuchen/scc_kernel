@@ -20,4 +20,7 @@ typedef             short   int16_t;    // 16位有符号整数
 typedef unsigned    char    uint8_t;    // 8位无符号整数
 typedef             char    int8_t;     // 8位有符号整数
 
+
+typedef int32_t pid_t;
+
 #endif      //INCLUDE_TYPES_H_

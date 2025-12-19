@@ -37,8 +37,9 @@ void show_memory_map()
 
     // 遍历内存映射表
     // 注意：不能简单地按固定步长遍历，因为每个条目的大小可能不同
-    mmap_entry_t *mmap = (mmap_entry_t *)mmap_addr;
-    for (mmap = (mmap_entry_t *)mmap_addr; (uint32_t)mmap < mmap_addr + mmap_length; mmap++)
+    mmap_entry_t *mmap;
+    for (mmap = (mmap_entry_t *)mmap_addr; (uint32_t)mmap < mmap_addr + mmap_length; 
+            mmap = (mmap_entry_t *)((uint32_t)mmap + mmap -> size + sizeof(mmap -> size)))
     {
         // 打印每个内存区域的信息
         // base_addr: 起始地址（64位，分为高32位和低32位）

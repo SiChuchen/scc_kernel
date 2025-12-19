@@ -7,10 +7,16 @@
 
 #include "console.h"
 #include "common.h"
+#include "vmm.h"
 
+ /*
+  * VGA (Video Graphics Array) 是一种视频显示标准
+  * 在默认的文本模式下，VGA 控制器保留了一块内存作为屏幕字符显示的缓冲区
+  * 通过修改这块内存，可以改变屏幕上显示的字符和颜色
+  */
 // VGA 文本模式显存起始地址
 // 在 x86 PC 中，VGA 文本模式显存映射到物理地址 0xB8000
-static uint16_t *video_memory = (uint16_t *)0xB8000;
+static uint16_t *video_memory = (uint16_t *)(0xB8000 + PAGE_OFFSET);
 
 // 屏幕光标的坐标（字符位置）
 static uint8_t cursor_x = 0;	// 列（0-79）

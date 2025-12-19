@@ -48,6 +48,8 @@ struct multiboot_t {
 	 * 以下两项指出保存由BIOS提供的内存分布的缓冲区的地址和长度
 	 * mmap_addr是缓冲区的地址，mmap_length是缓冲区的总大小
 	 * 缓冲区由一个或者多个下面的大小/结构对 mmap_entry_t（size实际上是用来跳过下一个对的）组成
+	 * GRUB 已经把内存探测的结果按照每个分段的形式整理在了 mmap_entry_t 这样的结构体数组中
+	 * 目前在这里给我们的就是这个结构体数组的首地址和整个数组的长度
 	 */
 	uint32_t mmap_length;		
 	uint32_t mmap_addr;
@@ -81,6 +83,10 @@ struct mmap_entry_t {
 	uint32_t type;
 } __attribute__((packed)) mmap_entry_t;
 
+// 内核未建立分页机制前暂存的指针
+extern multiboot_t *mboot_ptr_tmp;
+
+// 内核建立页表之后的指针
 // 声明全局的 multiboot_t * 指针
 // GRUB 在启动内核时，会将 multiboot 信息结构的物理地址存入 EBX
 // boot.s 中将 EBX 的值保存到 glb_mboot_ptr (定义在 boot/boot.s:68)

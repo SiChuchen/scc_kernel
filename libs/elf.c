@@ -6,6 +6,7 @@
 #include "common.h"
 #include "string.h"
 #include "elf.h"
+#include "vmm.h"
 
 // 从 multiboot_t 结构获取 ELF 信息
 // 解析 GRUB 提供的 ELF section header table，提取符号表和字符串表
@@ -30,20 +31,22 @@ elf_t elf_from_multiboot(multiboot_t *mb)
 	// 遍历所有 section header，查找符号表和字符串表
 	for (i = 0; i < mb->num; i++) {
 		// 获取当前 section 的名称
-		// shstrtab + sh[i].name 得到指向名称字符串的指针
-		const char *name = (const char *)(shstrtab + sh[i].name);
+		// shstrtab + sh[i].name 得到指向名称字符串的指针	+ PAGE_OFFSET 转到高虚拟地址
+		const char *name = (const char *)(shstrtab + sh[i].name) + PAGE_OFFSET;
 
 		// 查找 .strtab section（字符串表）
 		// .strtab 存储所有符号的名称字符串
 		if (strcmp(name, ".strtab") == 0) {
-			elf.strtab = (const char *)sh[i].addr;	// 字符串表的起始地址
+			// + PAGE_OFFSET 转到高虚拟地址
+			elf.strtab = (const char *)sh[i].addr + PAGE_OFFSET;	// 字符串表的起始地址
 			elf.strtabsz = sh[i].size;				// 字符串表的大小
 		}
 
 		// 查找 .symtab section（符号表）
 		// .symtab 存储所有符号的信息（名称、地址、大小等）
 		if (strcmp(name, ".symtab") == 0) {
-			elf.symtab = (elf_symbol_t*)sh[i].addr;	// 符号表的起始地址
+			// + PAGE_OFFSET 转到高虚拟地址
+			elf.symtab = (elf_symbol_t*)(sh[i].addr + PAGE_OFFSET);	// 符号表的起始地址
 			elf.symtabsz = sh[i].size;				// 符号表的大小
 		}
 	}

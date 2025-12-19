@@ -8,14 +8,16 @@
 #include "debug.h"
 #include "common.h"
 #include "idt.h"
+#include "sched.h"
 
 // 时钟中断的回调函数
 // 每次时钟中断触发时被调用
 // regs - 中断发生时的寄存器状态
 void timer_callback(pt_regs *regs)
 {
-	static uint32_t tick = 0;  // 时钟滴答计数器
-	printk_color(rc_black, rc_red, "Tick: %d\n", tick++);
+	// static uint32_t tick = 0;  // 时钟滴答计数器
+	// printk_color(rc_black, rc_red, "Tick: %d\n", tick++);
+	schedule();  // 调用调度函数，切换任务
 }
 
 // 初始化定时器

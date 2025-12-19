@@ -64,7 +64,7 @@ void init_idt()
 	outb(0x21, 0x0);		// 主片允许所有中断
 	outb(0xA1, 0x0);		// 从片允许所有中断
 
-	// 清空中断处理函数数组
+	// 清空中断处理函数指针数组
 	bzero((uint8_t *)&interrupt_handlers, sizeof(interrupt_handler_t) * 256);
 
 	// 设置 IDTR 寄存器的值
