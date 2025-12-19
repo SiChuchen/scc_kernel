@@ -1,0 +1,141 @@
+{
+  "phases": [
+    {
+      "name": "phase0_baseline",
+      "tasks": [
+        { "task": "build_and_boot_current_kernel", "done": false },
+        { "task": "verify_qemu_harddisk_boot_logs", "done": false }
+      ]
+    },
+    {
+      "name": "phase1_sync_primitives",
+      "tasks": [
+        { "task": "add_atomic_ops", "done": false },
+        { "task": "add_spinlock", "done": false },
+        { "task": "add_local_intr_store_restore_macros", "done": false },
+        { "task": "basic_lock_usage_smoke_test", "done": false }
+      ]
+    },
+    {
+      "name": "phase2_memory_management",
+      "tasks": [
+        { "task": "introduce_page_metadata_and_zones", "done": false },
+        { "task": "implement_first_fit_or_buddy_allocator", "done": false },
+        { "task": "add_slob_or_equivalent_heap", "done": false },
+        { "task": "extend_vmm_and_page_fault_handler", "done": false },
+        { "task": "memory_allocation_tests", "done": false }
+      ]
+    },
+    {
+      "name": "phase3_tasks_and_syscalls",
+      "tasks": [
+        { "task": "extend_task_struct_with_mm_and_files", "done": false },
+        { "task": "pid_bitmap_and_need_resched_flow", "done": false },
+        { "task": "kernel_thread_entry_and_context_switch_update", "done": false },
+        { "task": "syscall_table_and_int80_handler", "done": false },
+        { "task": "syscall_smoke_tests", "done": false }
+      ]
+    },
+    {
+      "name": "phase4_devices",
+      "tasks": [
+        { "task": "char_dev_framework", "done": false },
+        { "task": "block_dev_framework", "done": false },
+        { "task": "keyboard_driver_and_getchar", "done": false },
+        { "task": "ide_driver_identify_and_read", "done": false },
+        { "task": "pic_abstraction_init_and_eoi", "done": false }
+      ]
+    },
+    {
+      "name": "phase5_vfs_and_filesystems",
+      "tasks": [
+        { "task": "vfs_core_structs_and_registration", "done": false },
+        { "task": "ramfs_as_root_fs", "done": false },
+        { "task": "mbr_parse_and_partition_log", "done": false },
+        { "task": "sfs_framework_and_mount_flow", "done": false },
+        { "task": "vfs_api_smoke_tests", "done": false }
+      ]
+    },
+    {
+      "name": "phase6_user_interaction",
+      "tasks": [
+        { "task": "console_scroll_view", "done": false },
+        { "task": "keyboard_controlled_scroll_demo", "done": false }
+      ]
+    },
+    {
+      "name": "phase7_packaging",
+      "tasks": [
+        { "task": "hdd_image_update_targets", "done": false },
+        { "task": "iso_build_and_boot", "done": false },
+        { "task": "document_test_commands", "done": false }
+      ]
+    },
+    {
+      "name": "phase8_ring3_entry",
+      "tasks": [
+        { "task": "user_segment_and_tss_setup", "done": false },
+        { "task": "user_stack_support_in_task_struct", "done": false },
+        { "task": "user_entry_stub_and_demo", "done": false }
+      ]
+    },
+    {
+      "name": "phase9_elf_and_exec",
+      "tasks": [
+        { "task": "elf_loader_segments_mapping", "done": false },
+        { "task": "user_pagetable_creation_and_switch_cr3", "done": false },
+        { "task": "execve_framework_with_user_stack", "done": false }
+      ]
+    },
+    {
+      "name": "phase10_syscall_libc",
+      "tasks": [
+        { "task": "syscall_table_full_set", "done": false },
+        { "task": "user_syscall_stubs", "done": false },
+        { "task": "basic_libc_wrappers", "done": false }
+      ]
+    },
+    {
+      "name": "phase11_sched_wait_sleep",
+      "tasks": [
+        { "task": "time_slice_and_preempt", "done": false },
+        { "task": "sleep_wakeup_timer_queue", "done": false },
+        { "task": "wait_zombie_reap_and_resource_cleanup", "done": false }
+      ]
+    },
+    {
+      "name": "phase12_ipc_fd",
+      "tasks": [
+        { "task": "pipe_read_write_blocking", "done": false },
+        { "task": "dup_dup2_and_fd_refcount", "done": false },
+        { "task": "fork_inherit_fd_table", "done": false }
+      ]
+    },
+    {
+      "name": "phase13_filesystem_real",
+      "tasks": [
+        { "task": "vfs_path_lookup_and_open_read_write_close", "done": false },
+        { "task": "sfs_block_bitmap_inode_ops", "done": false },
+        { "task": "buffer_cache_basic", "done": false },
+        { "task": "mount_sfs_on_ide_or_ram", "done": false }
+      ]
+    },
+    {
+      "name": "phase14_shell",
+      "tasks": [
+        { "task": "builtins_cd_pwd_exit_help_ls_cat", "done": false },
+        { "task": "run_external_programs_with_fork_exec", "done": false },
+        { "task": "pipe_and_redirection_with_dup2", "done": false },
+        { "task": "line_editing_basics", "done": false }
+      ]
+    },
+    {
+      "name": "phase15_regression",
+      "tasks": [
+        { "task": "build_and_image_scripts", "done": false },
+        { "task": "user_program_build_scripts", "done": false },
+        { "task": "regression_script_boot_and_run_commands", "done": false }
+      ]
+    }
+  ]
+}

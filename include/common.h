@@ -12,6 +12,14 @@ uint8_t inb(uint16_t port);
 // 端口读一个字
 uint16_t inw(uint16_t port);
 
+static inline void enable_intr()
+{
+    asm volatile ("sti");
+}
 
+static inline void disable_intr()
+{
+    asm volatile ("cli" ::: "memory");
+}
 
 #endif

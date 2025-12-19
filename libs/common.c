@@ -47,3 +47,6 @@ inline uint16_t inw(uint16_t port)
     asm volatile("inw %1,%0" : "=a"(ret) : "dN"(port));
     return ret;
 }
+
+
+// 开启/关闭中断的接口在 include/common.h 中以 static inline 形式提供
