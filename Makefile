@@ -136,6 +136,11 @@ $(KERNEL): $(S_OBJECTS) $(C_OBJECTS)
 
 .PHONY: clean
 clean:
+	$(RM) -r $(OBJ_DIR) $(KERNEL)
+
+# 全部清理（含镜像）
+.PHONY: cleanall
+cleanall:
 	$(RM) -r $(BUILD_DIR)
 
 .PHONY: update_image
