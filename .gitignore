@@ -20,8 +20,21 @@ scc_kernel
 *.swo
 
 # 镜像文件（可选：如果镜像较大可以忽略）
-# floppy.img
+floppy.img
+_build/
+.claude/
+AGENTS.md
+CLAUDE.md
 
 # 临时文件
 /tmp/
 *.tmp
+
+myMakefile.md
+floppy.img
+disk.img
+
+# 大模型生成的文件
+.claude/
+AGENTS.md
+CLAUDE.md
