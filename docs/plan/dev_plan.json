@@ -3,17 +3,17 @@
     {
       "name": "phase0_baseline",
       "tasks": [
-        { "task": "build_and_boot_current_kernel", "done": false },
-        { "task": "verify_qemu_harddisk_boot_logs", "done": false }
+        { "task": "build_and_boot_current_kernel", "done": true },
+        { "task": "verify_qemu_harddisk_boot_logs", "done": true }
       ]
     },
     {
       "name": "phase1_sync_primitives",
       "tasks": [
-        { "task": "add_atomic_ops", "done": false },
-        { "task": "add_spinlock", "done": false },
-        { "task": "add_local_intr_store_restore_macros", "done": false },
-        { "task": "basic_lock_usage_smoke_test", "done": false }
+        { "task": "add_atomic_ops", "done": true },
+        { "task": "add_spinlock", "done": true },
+        { "task": "add_local_intr_store_restore_macros", "done": true },
+        { "task": "basic_lock_usage_smoke_test", "done": true }
       ]
     },
     {

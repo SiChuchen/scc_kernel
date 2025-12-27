@@ -9,6 +9,11 @@
 #include "common.h"
 #include "idt.h"
 #include "sched.h"
+#include "spinlock.h"
+#include "sync.h"
+
+static spinlock_t ticks_lock = SPINLOCK_INIT;
+static uint32_t ticks = 0;
 
 // 时钟中断的回调函数
 // 每次时钟中断触发时被调用
@@ -17,7 +22,15 @@ void timer_callback(pt_regs *regs)
 {
 	// static uint32_t tick = 0;  // 时钟滴答计数器
 	// printk_color(rc_black, rc_red, "Tick: %d\n", tick++);
-	schedule();  // 调用调度函数，切换任务
+	// schedule();  // 调用调度函数，切换任务
+
+	uint32_t flags = spin_lock_irqsave(&ticks_lock);
+	ticks ++;
+	if ((ticks % 100) == 0)
+	{
+		printk_color(rc_black, rc_green, "System Tick: %d\n", ticks);
+	}
+	spin_unlock_irqrestore(&ticks_lock, flags);
 }
 
 // 初始化定时器
