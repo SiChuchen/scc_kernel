@@ -21,6 +21,7 @@ typedef struct header
 } header_t;
 
 // 初始化堆
+// 为兼容旧接口，声明 kmalloc/kfree，但实际实现由 SLOB 提供
 void init_heap();
 
 // 内存申请

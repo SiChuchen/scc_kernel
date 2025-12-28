@@ -1,50 +1,38 @@
 /* 物理内存管理（Physical Memory Manager）
- * 使用栈式页框分配器管理物理内存
+ * 使用页元数据 + 有序空闲链表分配器，支持连续页的 first-fit
  * 页大小：4KB（0x1000 字节）
  * 最大支持：512MB 物理内存
- *
- * 工作原理：
- * - 将所有可用的物理页框地址存储在一个栈中
- * - 分配时从栈顶弹出一个页框地址
- * - 释放时将页框地址压入栈顶
  */
 
-#include "multiboot.h"
 #include "common.h"
 #include "debug.h"
+#include "string.h"
+#include "mm.h"
 #include "pmm.h"
 
-// 物理内存页面管理栈
-// 每个元素存储一个 4KB 页框的起始物理地址
-static uint32_t pmm_stack[PAGE_MAX_SIZE + 1];
+// 页元数据数组基址（内核虚拟地址），在 init_pmm() 中放置到 kern_end 之后
+page_t *pages;
 
-// 物理内存管理栈的栈顶指针
-// 指向栈中最后一个有效元素的索引
-static uint32_t pmm_stack_top;
+// 空闲页链表头（按物理地址升序，节点 run 表示连续空闲段长度）
+static page_t *free_list = 0;
 
-// 可用物理内存页的总数量
+// 当前可用物理页总数
 uint32_t phy_page_count;
 
 // 显示 BIOS 提供的物理内存布局
-// 遍历 Multiboot 信息中的内存映射表，打印每个内存区域的信息
 void show_memory_map()
 {
-    // 从 Multiboot 信息结构中获取内存映射表
-    uint32_t mmap_addr = glb_mboot_ptr->mmap_addr;      // 内存映射表的起始地址
-    uint32_t mmap_length = glb_mboot_ptr->mmap_length;  // 内存映射表的总长度（字节）
+    uint32_t mmap_addr = glb_mboot_ptr->mmap_addr;
+    uint32_t mmap_length = glb_mboot_ptr->mmap_length;
 
     printk("Memory map:\n");
 
-    // 遍历内存映射表
-    // 注意：不能简单地按固定步长遍历，因为每个条目的大小可能不同
-    mmap_entry_t *mmap;
-    for (mmap = (mmap_entry_t *)mmap_addr; (uint32_t)mmap < mmap_addr + mmap_length; 
-            mmap = (mmap_entry_t *)((uint32_t)mmap + mmap -> size + sizeof(mmap -> size)))
+    mmap_entry_t *mmap = (mmap_entry_t *)(mmap_addr + PAGE_OFFSET);
+    mmap_entry_t *mmap_end = (mmap_entry_t *)(mmap_addr + mmap_length + PAGE_OFFSET);
+
+    for (; mmap < mmap_end;
+         mmap = (mmap_entry_t *)((uint32_t)mmap + mmap->size + sizeof(mmap->size)))
     {
-        // 打印每个内存区域的信息
-        // base_addr: 起始地址（64位，分为高32位和低32位）
-        // length: 长度（64位，分为高32位和低32位）
-        // type: 类型（1=可用内存，其他=保留区域）
         printk("base_addr = 0x%x%08x,length = 0x%x%08x, type = 0x%x\n",
                (uint32_t)mmap->base_addr_high, (uint32_t)mmap->base_addr_low,
                (uint32_t)mmap->length_high, (uint32_t)mmap->length_low,
@@ -52,69 +40,209 @@ void show_memory_map()
     }
 }
 
-// 初始化物理内存管理
-// 遍历 Multiboot 内存映射表，将所有可用的物理页框加入管理栈
-void init_pmm()
+// 判断一个物理页是否属于保留区域：低端、内核自身、页元数据所在区
+static inline int is_reserved(uint32_t pa, uint32_t kern_start_pa, uint32_t meta_end_pa)
 {
-    // 获取内存映射表的起始和结束地址
-    mmap_entry_t *mmap_start_addr = (mmap_entry_t *)glb_mboot_ptr->mmap_addr;
-    mmap_entry_t *mmap_end_addr = (mmap_entry_t *)glb_mboot_ptr->mmap_addr + glb_mboot_ptr->mmap_length;
+    return pa < 0x100000 || (pa >= kern_start_pa && pa < meta_end_pa);
+}
 
-    mmap_entry_t *map_entry;
+// 在有序空闲链表中插入一个空闲块，并尝试与前后相邻块合并
+static void free_list_insert_merge(page_t *block)
+{
+    page_t *prev = NULL, *cur = free_list;
 
-    // 遍历内存映射表中的每个条目
-    for (map_entry = mmap_start_addr; map_entry < mmap_end_addr; map_entry++)
-    {
-        // 检查是否为可用内存区域
-        // type == 1 表示可用 RAM
-        // base_addr_low == 0x100000 表示从 1MB 开始的内存区域
-        // （0-1MB 区域留给 BIOS 和内核自身使用）
-        if (map_entry->type == 1 && map_entry->base_addr_low == 0x100000)
-        {
-            // 计算可用内存的起始地址
-            // 跳过内核占用的部分：内核从 0x100000 开始，到 kern_end 结束
-            // kern_start 和 kern_end 是链接器脚本中定义的符号
-            uint32_t page_addr = map_entry->base_addr_low + (uint32_t)(kern_end - kern_start);
+    // 从头开始遍历，直到找到我们要插入的块在链表中的位置
+    while (cur && cur < block) {
+        prev = cur;
+        cur = cur->next;
+    }
 
-            // 计算可用内存的结束地址
-            uint32_t length = map_entry->base_addr_low + map_entry->length_low;
+    block->next = cur;
+    block->flags |= PG_FREE;
 
-            // 将该区域中的所有页框加入管理栈
-            while (page_addr < length && page_addr <= PMM_MAX_SIZE)
-            {
-                // 将页框地址加入空闲页框栈
-                pmm_free_page(page_addr);
-                // 移动到下一个页框（页大小为 4KB = 0x1000）
-                page_addr += PMM_PAGE_SIZE;
-                // 增加可用页框计数
-                phy_page_count++;
-            }
+    // 先尝试与前一个块合并
+    if (prev && (page2pa(prev) + prev->run * PMM_PAGE_SIZE == page2pa(block))) {
+        prev->run += block->run;
+        block = prev;
+    } else {
+        if (prev) {
+            prev->next = block;
+        } else {
+            free_list = block;
         }
+    }
+
+    // 再尝试与后一个块合并
+    if (cur && (page2pa(block) + block->run * PMM_PAGE_SIZE == page2pa(cur))) {
+        block->run += cur->run;
+        block->next = cur->next;
     }
 }
 
-// 分配一个物理内存页
-// 返回：分配的页框的起始物理地址
-uint32_t pmm_alloc_page()
+// 把一个连续空闲段（物理起点 + 长度）放入链表
+static void push_free_run(uint32_t start_pa, uint32_t len)
 {
-    // 检查是否还有可用页框
-    // pmm_stack_top == 0 表示栈为空
-    assert(pmm_stack_top != 0, "out of memory");
-
-    // 从栈顶弹出一个页框地址
-    uint32_t page = pmm_stack[pmm_stack_top--];
-
-    return page;
+    if (len == 0) {
+        return;
+    }
+    page_t *p = pa2page(start_pa);
+    p->run = len;
+    p->ref = 0;
+    p->flags = PG_FREE;
+    p->next = NULL;
+    free_list_insert_merge(p);
+    phy_page_count += len;
 }
 
-// 释放一个物理内存页
-// p - 要释放的页框的起始物理地址
+// 初始化物理内存管理：建立页元数据数组，遍历 mmap 链接空闲页
+void init_pmm()
+{
+    // 计算内核的物理地址范围（kern_* 是高半虚拟地址）
+    uint32_t kern_start_pa = (uint32_t)kern_start - PAGE_OFFSET;
+    uint32_t kern_end_pa   = (uint32_t)kern_end   - PAGE_OFFSET;
+
+    // 把页元数据数组放在 kern_end 之后，并按页对齐
+    // 页元数据数组的初始物理地址
+    uint32_t meta_start_pa = PAGE_ALIGN(kern_end_pa);
+    // 页元数据数组的大小
+    uint32_t meta_size     = PAGE_MAX_SIZE * sizeof(page_t);
+    // 页元数据数组的结束物理地址
+    uint32_t meta_end_pa   = meta_start_pa + meta_size;
+
+    // pages 指向元数据数组的高半虚拟地址，元数据数组的初始虚拟地址
+    pages = (page_t *)(meta_start_pa + PAGE_OFFSET);
+    // 把这块区域清空用于作为页元数据数组的存放区
+    bzero(pages, meta_size);
+
+    phy_page_count = 0;
+    free_list = 0;
+
+    // 遍历 multiboot 提供的物理内存映射（物理地址转换为高半虚拟地址访问）
+    uint32_t mmap_addr = glb_mboot_ptr->mmap_addr;
+    uint32_t mmap_length = glb_mboot_ptr->mmap_length;
+    mmap_entry_t *mmap = (mmap_entry_t *)(mmap_addr + PAGE_OFFSET);
+    mmap_entry_t *mmap_end = (mmap_entry_t *)(mmap_addr + mmap_length + PAGE_OFFSET);
+
+    // 这个大循环遍历的是保留区域和可用内存区域，是一段区域，是multiboot提供的内存映射表
+    for (; mmap < mmap_end;
+         mmap = (mmap_entry_t *)((uint32_t)mmap + mmap->size + sizeof(mmap->size)))
+    {
+        if (mmap->type != 1) {
+            continue;   // 非可用内存区域直接跳过
+        }
+
+        // 这里得到的是一段可用的ram，而不是一页，所以这里要将这一段全部组织成页
+        uint32_t begin = (uint32_t)mmap->base_addr_low;
+        uint32_t end   = begin + (uint32_t)mmap->length_low;
+
+        // 起始地址按页对齐
+        begin = PAGE_ALIGN(begin);
+
+        // 累积连续的空闲页段，遇到保留区就 flush
+        uint32_t run_start = 0;
+        uint32_t run_len = 0;
+
+        for (uint32_t pa = begin; pa + PMM_PAGE_SIZE <= end && pa <= PMM_MAX_SIZE; pa += PMM_PAGE_SIZE)
+        {
+            // 如果这个页处于内核和元数据所在区域，则标记为保留页
+            if (is_reserved(pa, kern_start_pa, meta_end_pa)) {
+                // 遇到保留页，先把前面的空闲 run 刷入链表
+                push_free_run(run_start, run_len);
+                run_start = 0;
+                run_len = 0;
+
+                page_t *p = pa2page(pa);
+                p->flags = PG_RESERVED;
+                p->ref = 0;
+                p->run = 0;
+                p->next = NULL;
+                // 跳过当前循环，强迫开启下次循环
+                continue;
+            }
+
+            if (run_len == 0) {
+                run_start = pa;
+                run_len = 1;
+            } else if (pa == run_start + run_len * PMM_PAGE_SIZE) {
+                run_len++;
+            } else {
+                // 非连续，先 flush 之前的 run，再开始新的
+                push_free_run(run_start, run_len);
+                run_start = pa;
+                run_len = 1;
+            }
+        }
+
+        // 刷新本段末尾尚未入链的 run
+        push_free_run(run_start, run_len);
+    }
+
+    printk("pmm init: free pages = %u\n", phy_page_count);
+}
+
+// 分配连续 n 页（first-fit）
+page_t *alloc_pages(uint32_t n)
+{
+    page_t *prev = NULL, *cur = free_list;
+
+    while (cur) {
+        if (cur->run >= n) {
+            page_t *ret = cur;
+
+            if (cur->run == n) {
+                // 恰好整段取走
+                if (prev) {
+                    prev->next = cur->next;
+                } else {
+                    free_list = cur->next;
+                }
+            } else {
+                // 切割前 n 页，剩余部分继续留在空闲链表
+                page_t *remain = cur + n;
+                remain->run = cur->run - n;
+                remain->flags = PG_FREE;
+                remain->ref = 0;
+                remain->next = cur->next;
+
+                if (prev) {
+                    prev->next = remain;
+                } else {
+                    free_list = remain;
+                }
+            }
+
+            ret->run = n;
+            ret->flags &= ~PG_FREE;
+            ret->ref = 1;
+            ret->next = NULL;
+            return ret;
+        }
+
+        prev = cur;
+        cur = cur->next;
+    }
+
+    return NULL; // 无可用空闲块
+}
+
+// 释放连续 n 页（按物理地址插入并尝试合并）
+void free_pages(page_t *base, uint32_t n)
+{
+    base->run = n;
+    base->ref = 0;
+    base->flags = PG_FREE;
+    base->next = NULL;
+    free_list_insert_merge(base);
+}
+
+// 兼容旧接口：返回物理地址
+uint32_t pmm_alloc_page()
+{
+    page_t *p = alloc_pages(1);
+    return p ? page2pa(p) : 0;
+}
+
 void pmm_free_page(uint32_t p)
 {
-    // 检查栈是否已满
-    // pmm_stack_top == PAGE_MAX_SIZE 表示栈已满
-    assert(pmm_stack_top != PAGE_MAX_SIZE, "out of pmm_stack stack");
-
-    // 将页框地址压入栈顶
-    pmm_stack[++pmm_stack_top] = p;
+    free_pages(pa2page(p), 1);
 }

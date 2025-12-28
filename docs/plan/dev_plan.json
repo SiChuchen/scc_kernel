@@ -19,11 +19,11 @@
     {
       "name": "phase2_memory_management",
       "tasks": [
-        { "task": "introduce_page_metadata_and_zones", "done": false },
-        { "task": "implement_first_fit_or_buddy_allocator", "done": false },
-        { "task": "add_slob_or_equivalent_heap", "done": false },
-        { "task": "extend_vmm_and_page_fault_handler", "done": false },
-        { "task": "memory_allocation_tests", "done": false }
+        { "task": "introduce_page_metadata_and_zones", "done": true },
+        { "task": "implement_first_fit_or_buddy_allocator", "done": true },
+        { "task": "add_slob_or_equivalent_heap", "done": true },
+        { "task": "extend_vmm_and_page_fault_handler", "done": true },
+        { "task": "memory_allocation_tests", "done": true }
       ]
     },
     {

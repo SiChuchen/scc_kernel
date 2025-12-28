@@ -3,12 +3,20 @@
 #include "debug.h"
 #include "vmm.h"
 #include "pmm.h"
-
+#include "mm.h"
 // 内核页目录区域
 pgd_t pgd_kern[PGD_SIZE] __attribute__ ((aligned (PAGE_SIZE)));
 
 // 内核页表区域
 static pte_t pte_kern[PTE_COUNT][PTE_SIZE] __attribute__ ((aligned (PAGE_SIZE)));
+
+// 判断一个页表页的物理地址是否属于内核预置的 pte_kern 区域
+static inline int is_kernel_pte_phys(uint32_t pa)
+{
+    uint32_t start = (uint32_t)pte_kern - PAGE_OFFSET;
+    uint32_t end = start + sizeof(pte_kern);
+    return pa >= start && pa < end;
+}
 
 // 初始化虚拟内存管理
 // 这里其实只是为高地址 0xC0000000 开始的 128 个 PDE（页目录项）建立了页表指针
@@ -70,16 +78,11 @@ void map(pgd_t *pgd_now,uint32_t va,uint32_t pa,uint32_t flags)
     // 如果 PDE 为 0（即尚未为该 pgd_index 分配页表页）
     if(!pte)
     {
-        // 调用 pmm_alloc_page() 分配一个物理页（返回物理地址 PA_pt）
-        // 这里分配的物理页是页表的物理页，即页表本身没有被分配，所以这里分配一个物理页存储物理地址
-        pte = (pte_t *)pmm_alloc_page();
-        // 把页表页的物理地址写入页目录项，并设置 flags
-        pgd_now[pgd_index] = (uint32_t)pte | PAGE_PRESENT | PAGE_WRITE;
+        page_t *pt_page = alloc_pages(1);
+        assert(pt_page,"map: alloc page for page table failed");
+        pgd_now[pgd_index] = page2pa(pt_page) | flags | PAGE_PRESENT | PAGE_WRITE;
 
-        // 转换到内核线性地址并清 0
-        // 要操作该页表页内容（写 PTE），需要把物理页帧映射到内核虚拟地址空间：
-        // 在此实现中用简单的线性换算 pte = PA_pt + PAGE_OFFSET 得到该页表页的虚拟地址，然后 bzero 清零页面表项
-        pte = (pte_t *)((uint32_t)pte + PAGE_OFFSET);
+        pte = (pte_t *)page2kva(pt_page);
         bzero(pte,PAGE_SIZE);
     }
     else
@@ -114,6 +117,23 @@ void unmap(pgd_t *pgd_now,uint32_t va)
 
     // 通知 CPU 更新页表缓存
     asm volatile ("invlpg (%0)" : : "a" (va));
+
+    // 如果该页表页已空，且不属于内核静态页表，则回收之
+    int empty = 1;
+    for (uint32_t i = 0; i < PTE_SIZE; i++) {
+        if (pte[i] & PAGE_PRESENT) {
+            empty = 0;
+            break;
+        }
+    }
+
+    if (empty) {
+        uint32_t pte_phys = pgd_now[pgd_index] & PAGE_MASK;
+        if (!is_kernel_pte_phys(pte_phys)) {
+            pgd_now[pgd_index] = 0;
+            free_pages(pa2page(pte_phys), 1);
+        }
+    }
 }
 
 // 检查 va 是否有有效映射；若有且 pa 非空，则把物理页基址写进 *pa

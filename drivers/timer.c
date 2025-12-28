@@ -26,10 +26,6 @@ void timer_callback(pt_regs *regs)
 
 	uint32_t flags = spin_lock_irqsave(&ticks_lock);
 	ticks ++;
-	if ((ticks % 100) == 0)
-	{
-		printk_color(rc_black, rc_green, "System Tick: %d\n", ticks);
-	}
 	spin_unlock_irqrestore(&ticks_lock, flags);
 }
 

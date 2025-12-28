@@ -10,6 +10,12 @@ void page_fault_handler(pt_regs * regs)
     printk("Page fault at 0x%x, virtual faulting address 0x%x\n", regs->eip, cr2);
 	printk("Error code: %x\n", regs->err_code);
 
+    // 如果内核态访问发生非存在错误，直接 panic，避免继续运行产生不可预期行为
+    if (!(regs->err_code & 0x1) && !(regs->err_code & 0x4))
+    {
+        panic("Kernel page fault on not-present page");
+    }
+
     // bit 0 为 0 指页面不存在内存里
 	if ( !(regs->err_code & 0x1)) {
 		printk_color(rc_black, rc_red, "Because the page wasn't present.\n");
