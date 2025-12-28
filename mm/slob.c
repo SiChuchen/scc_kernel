@@ -31,6 +31,8 @@ typedef struct slob_page_meta {
     // 小块页：固定 1
     // 大块：记录这次分配占用了多少页，释放时用
     uint32_t n_pages;      /* 占用页数（大块或整页回收用） */
+    uint32_t total_blocks; /* 小块页：这一页可切出的块数 */
+    uint32_t free_blocks;  /* 小块页：当前空闲块数 */
 } slob_page_meta_t;
 
 // class_free[idx] 指向该档次的一条 free list
@@ -45,6 +47,12 @@ static inline uint32_t pick_class(uint32_t sz)
         }
     }
     return SLOB_CLASS_COUNT; // 需要大块
+}
+
+static inline slob_page_meta_t *slob_page_meta_from_ptr(void *p)
+{
+    uint32_t page_base = ((uint32_t)p) & PAGE_MASK;
+    return (slob_page_meta_t *)page_base;
 }
 
 void init_slob()
@@ -76,6 +84,8 @@ void *kmalloc(uint32_t sz)
         slob_page_meta_t *meta = (slob_page_meta_t *)page2kva(pg);
         meta->class_idx = SLOB_CLASS_COUNT;
         meta->n_pages = pages;
+        meta->total_blocks = 0;
+        meta->free_blocks = 0;
 
         // “强制转换”为 uint8_t*：把某个地址当成“字节指针”来做偏移或访问内存
         return (void *)((uint8_t *)meta + sizeof(*meta));
@@ -93,6 +103,8 @@ void *kmalloc(uint32_t sz)
         slob_page_meta_t *meta = (slob_page_meta_t *)base;
         meta->class_idx = idx;
         meta->n_pages = 1;
+        meta->total_blocks = 0;
+        meta->free_blocks = 0;
 
         // 把 base 移到“元数据之后”
         base += sizeof(*meta);
@@ -111,9 +123,16 @@ void *kmalloc(uint32_t sz)
             blk = b;
         }
         class_free[idx] = blk;
+        meta->total_blocks = count;
+        meta->free_blocks = count;
     }
 
     class_free[idx] = blk->next;
+    // 更新所属页的空闲计数
+    slob_page_meta_t *meta = slob_page_meta_from_ptr(blk);
+    if (meta->free_blocks > 0) {
+        meta->free_blocks--;
+    }
     return (void *)blk;
 }
 
@@ -143,6 +162,30 @@ void kfree(void *p)
     // 让它的下一个元素等于当前的链表头
     blk->next = class_free[idx];
     class_free[idx] = blk;
+    meta->free_blocks++;
+
+    // 如果该页已完全空闲，回收整页：从链表移除该页的所有块
+    if (meta->free_blocks == meta->total_blocks) {
+        uint32_t page_base = (uint32_t)meta;
+        slob_block_t *prev = NULL;
+        slob_block_t *cur = class_free[idx];
+        while (cur) {
+            uint32_t addr = (uint32_t)cur;
+            if (addr >= page_base + sizeof(*meta) && addr < page_base + PAGE_SIZE) {
+                if (prev) {
+                    prev->next = cur->next;
+                    cur = prev->next;
+                } else {
+                    class_free[idx] = cur->next;
+                    cur = class_free[idx];
+                }
+                continue;
+            }
+            prev = cur;
+            cur = cur->next;
+        }
+        free_pages(kva2page((void *)meta), 1);
+    }
 }
 
 // 基本自检：小块、大块分配/释放，日志输出

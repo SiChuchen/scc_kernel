@@ -102,8 +102,6 @@ int thread(void *arg)
 // 负责按顺序初始化所有内核子系统
 void kern_init()
 {
-    // 可选：物理页分配器简单自检，默认关闭
-#define PMM_TEST 0
 	// 初始化调试功能
 	// 从 multiboot 信息中提取 ELF 符号表，用于栈回溯时显示函数名
 	init_debug();
@@ -157,31 +155,6 @@ void kern_init()
 
 	// 打印可用物理内存页的数量
 	printk_color(rc_black, rc_red, "\nThe Count of Physical Memory Page is: %u\n\n", phy_page_count);
-
-#if PMM_TEST
-    // 简单测试：连续分配/释放 4 页，验证新的物理分配器
-    page_t *blk = alloc_pages(4);
-    if (blk) {
-        uint32_t pa = page2pa(blk);
-        printk_color(rc_black, rc_light_brown, "alloc_pages(4): start pa = 0x%08X\n", pa);
-        free_pages(blk, 4);
-        printk_color(rc_black, rc_light_brown, "free_pages(4) done\n\n");
-    } else {
-        printk_color(rc_black, rc_red, "alloc_pages(4) failed\n\n");
-    }
-
-    // 额外测试：再分配 2 页并确认连续性
-    blk = alloc_pages(2);
-    if (blk) {
-        uint32_t pa0 = page2pa(blk);
-        uint32_t pa1 = page2pa(blk + 1);
-        printk_color(rc_black, rc_light_brown, "alloc_pages(2): pa0 = 0x%08X, pa1 = 0x%08X\n", pa0, pa1);
-        free_pages(blk, 2);
-        printk_color(rc_black, rc_light_brown, "free_pages(2) done\n\n");
-    } else {
-        printk_color(rc_black, rc_red, "alloc_pages(2) failed\n\n");
-    }
-#endif
 
 	// test_heap(); // 旧堆测试暂时关闭，可改为 SLOB 自测
 
